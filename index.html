@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dogtroland - Dog Training Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <style>
+        .timer-glow { text-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .skill-chip.selected { background-color: #2563eb; color: #ffffff; border-color: #2563eb; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 font-sans text-gray-800">
+
+    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+        
+        <!-- App Header -->
+        <div class="bg-blue-600 text-white p-4 text-center">
+            <h1 class="text-2xl font-bold tracking-wide">Dogtroland</h1>
+            <p id="app-subtitle" class="text-xs text-blue-100">Dog Training & Performance Platform</p>
+        </div>
+
+        <!-- TRAINER INTERFACE -->
+        <div id="trainer-app">
+            <!-- Navigation Tabs -->
+            <div class="flex border-b text-sm font-semibold">
+                <button id="tab-register-btn" class="flex-1 py-3 border-b-2 border-blue-600 text-blue-600 bg-blue-50/50">
+                    1. Register Client
+                </button>
+                <button id="tab-trainer-btn" class="flex-1 py-3 border-b-2 border-transparent text-gray-500">
+                    2. Trainer Suite
+                </button>
+                <button id="tab-reports-btn" class="flex-1 py-3 border-b-2 border-transparent text-gray-500">
+                    3. Reports
+                </button>
+            </div>
+
+            <!-- TAB 1: CLIENT REGISTRATION -->
+            <div id="view-register" class="p-6 space-y-4">
+                <h2 class="text-lg font-bold text-gray-700">New Client & Dog Registration</h2>
+                
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Owner Name</label>
+                    <input type="text" id="owner-name" placeholder="e.g. Sarah Bane" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Dog Name</label>
+                    <input type="text" id="dog-name" placeholder="e.g. Rooky" class="w-full p-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <button id="btn-register" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition">
+                    Register & Generate QR Code
+                </button>
+
+                <!-- Generated QR Result Card -->
+                <div id="qr-result-card" class="hidden mt-6 p-4 border border-blue-200 bg-blue-50/30 rounded-2xl text-center space-y-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Client Generated Successfully</span>
+                    <h3 id="qr-client-title" class="text-lg font-bold text-gray-800"></h3>
+                    <p id="qr-client-id" class="text-xs font-mono text-gray-500"></p>
+                    
+                    <div id="qrcode" class="flex justify-center my-3 bg-white p-3 rounded-xl shadow-inner w-fit mx-auto"></div>
+                    <p class="text-xs text-gray-500">Scan code to open private VIP Client Portal.</p>
+                </div>
+            </div>
+
+            <!-- TAB 2: TRAINER SUITE -->
+            <div id="view-trainer" class="hidden p-6 space-y-4">
+                <h2 class="text-lg font-bold text-gray-700">Trainer Suite</h2>
+
+                <!-- Scanner Trigger View -->
+                <div id="scanner-view" class="space-y-3">
+                    <div id="reader" class="w-full rounded-xl overflow-hidden bg-gray-50 border"></div>
+                    <button id="btn-start-camera" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">
+                        📷 Start Camera Scanner
+                    </button>
+                    
+                    <div class="relative flex py-2 items-center">
+                        <div class="flex-grow border-t border-gray-200"></div>
+                        <span class="flex-shrink mx-4 text-xs text-gray-400 uppercase">Or quick test</span>
+                        <div class="flex-grow border-t border-gray-200"></div>
+                    </div>
+
+                    <button id="btn-simulate-scan" class="w-full py-2 bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold hover:bg-gray-300">
+                        ⚡ Use Last Generated QR
+                    </button>
+                </div>
+
+                <!-- Active Timer View -->
+                <div id="timer-view" class="hidden space-y-4 py-2">
+                    <div class="text-center">
+                        <div id="active-client-tag" class="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                            Client: ---
+                        </div>
+                        <div id="timer-display" class="text-5xl font-mono font-bold text-blue-600 timer-glow mt-2">00:00:00</div>
+                    </div>
+
+                    <!-- Session Data Entry -->
+                    <div class="bg-gray-50 p-4 rounded-xl border space-y-3 text-left">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Focus Skills</label>
+                            <div class="flex flex-wrap gap-2" id="skill-chips">
+                                <button type="button" class="skill-chip border px-3 py-1 rounded-full text-xs font-semibold bg-white text-gray-600" data-skill="Heel Work">Heel Work</button>
+                                <button type="button" class="skill-chip border px-3 py-1 rounded-full text-xs font-semibold bg-white text-gray-600" data-skill="Recall">Recall</button>
+                                <button type="button" class="skill-chip border px-3 py-1 rounded-full text-xs font-semibold bg-white text-gray-600" data-skill="Agility">Agility</button>
+                                <button type="button" class="skill-chip border px-3 py-1 rounded-full text-xs font-semibold bg-white text-gray-600" data-skill="Reactivity">Reactivity</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Session Performance</label>
+                            <select id="session-rating" class="w-full p-2 border rounded-lg text-sm bg-white">
+                                <option value="5">⭐⭐⭐⭐⭐ Excellent Focus</option>
+                                <option value="4">⭐⭐⭐⭐ Good Progress</option>
+                                <option value="3">⭐⭐⭐ Moderate Effort</option>
+                                <option value="2">⭐⭐ Needs Improvement</option>
+                                <option value="1">⭐ Distracted Session</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Trainer Field Notes</label>
+                            <textarea id="session-notes" rows="2" placeholder="Write personalized feedback for the owner..." class="w-full p-2 border rounded-lg text-sm bg-white outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+
+                    <button id="btn-stop-session" class="w-full py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600">
+                        Stop & Save Training Session
+                    </button>
+                </div>
+
+                <!-- History List -->
+                <div class="pt-4 border-t">
+                    <h3 class="font-bold text-gray-700 mb-2 text-sm">Recent Saved Sessions</h3>
+                    <div id="history-list" class="space-y-2 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- TAB 3: TRAINER REPORTS VIEW -->
+            <div id="view-reports" class="hidden p-6 space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-gray-700">Client Feedback & Reports</h2>
+                    <button id="btn-refresh-reports" class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-bold hover:bg-blue-100">🔄 Refresh</button>
+                </div>
+                <div id="trainer-reports-list" class="space-y-3">
+                    <p class="text-xs text-gray-400 italic">Loading incoming client messages...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLIENT READ-ONLY VIP PORTAL -->
+        <div id="client-app" class="hidden p-6 space-y-5">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-2xl shadow-md text-center space-y-1">
+                <span class="inline-block px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold">
+                    🐕 VIP Client Dashboard
+                </span>
+                <h2 id="client-dog-name" class="text-2xl font-extrabold tracking-wide">Dog Profile</h2>
+                <p id="client-owner-name" class="text-xs text-blue-100">Owner Account</p>
+            </div>
+
+            <!-- Session History Feed -->
+            <div>
+                <h3 class="font-bold text-gray-700 mb-3 text-sm flex justify-between items-center">
+                    <span>Training Activity Log</span>
+                    <span id="total-sessions-badge" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">0 Sessions</span>
+                </h3>
+                <div id="client-session-history" class="space-y-3"></div>
+            </div>
+
+            <!-- Contact Admin / Feedback Form -->
+            <div class="pt-4 border-t space-y-3">
+                <h3 class="font-bold text-gray-700 text-sm">Contact Admin / Send Feedback</h3>
+                <div id="feedback-alert" class="hidden p-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold text-center">
+                    ✅ Your message has been sent to the trainer!
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Topic</label>
+                    <select id="report-category" class="w-full p-2.5 border rounded-xl text-sm bg-white">
+                        <option value="General Feedback">💬 General Feedback</option>
+                        <option value="Training Question">❓ Training Question</option>
+                        <option value="Concern / Incident">⚠️ Report Issue / Concern</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Message</label>
+                    <textarea id="report-message" rows="3" placeholder="Type your message to Dogtroland Admin..." class="w-full p-2.5 border rounded-xl text-sm bg-white outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                </div>
+                <button id="btn-submit-report" class="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">
+                    Send Message to Admin
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const firebaseConfig = {
+                apiKey: "AIzaSyC_D3xZ_-1s4zejkqltQywTpuIx9X9YfsQ",
+                authDomain: "dogtroland-2d963.firebaseapp.com",
+                projectId: "dogtroland-2d963",
+                storageBucket: "dogtroland-2d963.firebasestorage.app",
+                messagingSenderId: "874627694620",
+                appId: "1:874627694620:web:c4892dae95e555e6581fd9"
+            };
+
+            let db = null;
+            try {
+                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+            } catch (err) {
+                console.error("Firebase initialization failed:", err);
+            }
+
+            let lastGeneratedClientId = "";
+            let activeClientId = "";
+            let timerInterval = null;
+            let elapsedSeconds = 0;
+            let selectedSkills = [];
+
+            // Universal Parameter Parser
+            function parseUniversalClientId(rawInput) {
+                if (!rawInput) return null;
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.has('id') && urlParams.get('id').length < 30) {
+                        return urlParams.get('id');
+                    }
+                    if (window.location.hash) {
+                        const hashString = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : window.location.hash.substring(1);
+                        const hashParams = new URLSearchParams(hashString);
+                        if (hashParams.has('id') && hashParams.get('id').length < 30) {
+                            return hashParams.get('id');
+                        }
+                    }
+                    if (typeof rawInput === 'string' && rawInput.includes('-') && rawInput.length < 30 && !rawInput.includes('http')) {
+                        return rawInput;
+                    }
+                } catch (e) {}
+                return null;
+            }
+
+            const resolvedClientId = parseUniversalClientId(window.location.href);
+
+            if (resolvedClientId) {
+                document.getElementById('trainer-app').classList.add('hidden');
+                document.getElementById('client-app').classList.remove('hidden');
+                document.getElementById('app-subtitle').innerText = "Client VIP Portal";
+                loadClientPortal(resolvedClientId);
+            } else {
+                setupTrainerApp();
+            }
+
+            function setupTrainerApp() {
+                document.getElementById('tab-register-btn').addEventListener('click', () => switchTab('register'));
+                document.getElementById('tab-trainer-btn').addEventListener('click', () => switchTab('trainer'));
+                document.getElementById('tab-reports-btn').addEventListener('click', () => {
+                    switchTab('reports');
+                    loadTrainerReports();
+                });
+                document.getElementById('btn-refresh-reports').addEventListener('click', loadTrainerReports);
+
+                document.getElementById('btn-register').addEventListener('click', registerClient);
+                document.getElementById('btn-start-camera').addEventListener('click', startCamera);
+                document.getElementById('btn-simulate-scan').addEventListener('click', simulateScan);
+                document.getElementById('btn-stop-session').addEventListener('click', stopSession);
+
+                document.querySelectorAll('.skill-chip').forEach(chip => {
+                    chip.addEventListener('click', () => {
+                        const skill = chip.getAttribute('data-skill');
+                        if (selectedSkills.includes(skill)) {
+                            selectedSkills = selectedSkills.filter(s => s !== skill);
+                            chip.classList.remove('selected');
+                        } else {
+                            selectedSkills.push(skill);
+                            chip.classList.add('selected');
+                        }
+                    });
+                });
+            }
+
+            function switchTab(tab) {
+                document.getElementById('view-register').classList.toggle('hidden', tab !== 'register');
+                document.getElementById('view-trainer').classList.toggle('hidden', tab !== 'trainer');
+                document.getElementById('view-reports').classList.toggle('hidden', tab !== 'reports');
+
+                document.getElementById('tab-register-btn').className = tab === 'register' 
+                    ? "flex-1 py-3 border-b-2 border-blue-600 text-blue-600 bg-blue-50/50"
+                    : "flex-1 py-3 border-b-2 border-transparent text-gray-500";
+
+                document.getElementById('tab-trainer-btn').className = tab === 'trainer'
+                    ? "flex-1 py-3 border-b-2 border-blue-600 text-blue-600 bg-blue-50/50"
+                    : "flex-1 py-3 border-b-2 border-transparent text-gray-500";
+
+                document.getElementById('tab-reports-btn').className = tab === 'reports'
+                    ? "flex-1 py-3 border-b-2 border-blue-600 text-blue-600 bg-blue-50/50"
+                    : "flex-1 py-3 border-b-2 border-transparent text-gray-500";
+            }
+
+            function registerClient() {
+                const owner = document.getElementById('owner-name').value.trim() || "Owner";
+                const dog = document.getElementById('dog-name').value.trim() || "Dog";
+                
+                lastGeneratedClientId = `${dog}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+                if (db) {
+                    db.collection("clients").doc(lastGeneratedClientId).set({
+                        ownerName: owner,
+                        dogName: dog,
+                        clientId: lastGeneratedClientId,
+                        registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }).catch(e => console.warn("Client registration DB error:", e));
+                }
+
+                document.getElementById('qr-client-title').innerText = `${dog} (${owner})`;
+                document.getElementById('qr-client-id').innerText = `ID: ${lastGeneratedClientId}`;
+                
+                let baseUrl = window.location.origin + window.location.pathname;
+                if (baseUrl.includes('codepen.io')) {
+                    baseUrl = window.location.href.split('?')[0].split('#')[0];
+                }
+                const universalClientUrl = `${baseUrl}?id=${lastGeneratedClientId}`;
+                
+                const qrContainer = document.getElementById('qrcode');
+                qrContainer.innerHTML = "";
+                new QRCode(qrContainer, { text: universalClientUrl, width: 160, height: 160 });
+                document.getElementById('qr-result-card').classList.remove('hidden');
+            }
+
+            function startCamera() {
+                const qrScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 220 });
+                qrScanner.render((decodedText) => {
+                    qrScanner.clear();
+                    const targetId = parseUniversalClientId(decodedText) || decodedText;
+                    startSession(targetId);
+                });
+            }
+
+            function simulateScan() {
+                startSession(lastGeneratedClientId || "Rooky-3602");
+            }
+
+            function startSession(clientId) {
+                activeClientId = clientId;
+                document.getElementById('active-client-tag').innerText = `Client: ${activeClientId}`;
+                document.getElementById('scanner-view').classList.add('hidden');
+                document.getElementById('timer-view').classList.remove('hidden');
+
+                elapsedSeconds = 0;
+                selectedSkills = [];
+                document.querySelectorAll('.skill-chip').forEach(c => c.classList.remove('selected'));
+                document.getElementById('session-notes').value = "";
+                document.getElementById('timer-display').innerText = "00:00:00";
+                
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    elapsedSeconds++;
+                    const hrs = Math.floor(elapsedSeconds / 3600).toString().padStart(2, '0');
+                    const mins = Math.floor((elapsedSeconds % 3600) / 60).toString().padStart(2, '0');
+                    const secs = (elapsedSeconds % 60).toString().padStart(2, '0');
+                    document.getElementById('timer-display').innerText = `${hrs}:${mins}:${secs}`;
+                }, 1000);
+            }
+
+            function stopSession() {
+                clearInterval(timerInterval);
+                const durationFormatted = document.getElementById('timer-display').innerText;
+                const rating = document.getElementById('session-rating').value;
+                const notes = document.getElementById('session-notes').value.trim();
+
+                if (db) {
+                    db.collection("sessions").add({
+                        clientId: activeClientId,
+                        durationSeconds: elapsedSeconds,
+                        durationFormatted: durationFormatted,
+                        skills: selectedSkills,
+                        rating: parseInt(rating),
+                        notes: notes,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                const item = document.createElement('div');
+                item.className = "p-3 bg-gray-50 border rounded-xl space-y-1";
+                item.innerHTML = `
+                    <div class="flex justify-between font-bold">
+                        <span>${activeClientId}</span>
+                        <span class="font-mono text-blue-600">${durationFormatted}</span>
+                    </div>
+                    <div class="text-xs text-gray-500">${'⭐'.repeat(parseInt(rating))} | Skills: ${selectedSkills.join(', ') || 'General Training'}</div>
+                    ${notes ? `<p class="text-xs text-gray-600 italic">"${notes}"</p>` : ''}
+                `;
+                document.getElementById('history-list').prepend(item);
+
+                document.getElementById('timer-view').classList.add('hidden');
+                document.getElementById('scanner-view').classList.remove('hidden');
+            }
+
+            function loadTrainerReports() {
+                const reportsContainer = document.getElementById('trainer-reports-list');
+                if (!db) return;
+
+                db.collection("reports").get().then((snapshot) => {
+                    if (snapshot.empty) {
+                        reportsContainer.innerHTML = '<p class="text-xs text-gray-400 italic">No incoming reports yet.</p>';
+                        return;
+                    }
+                    reportsContainer.innerHTML = "";
+                    snapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const card = document.createElement('div');
+                        card.className = "p-3 bg-gray-50 border rounded-xl space-y-1 text-sm shadow-sm";
+                        card.innerHTML = `
+                            <div class="flex justify-between items-center font-bold">
+                                <span class="text-indigo-600">${data.category || 'Feedback'}</span>
+                                <span class="text-xs font-mono text-gray-500 bg-gray-200 px-2 py-0.5 rounded">${data.clientId}</span>
+                            </div>
+                            <p class="text-gray-700 mt-1">${data.message}</p>
+                        `;
+                        reportsContainer.appendChild(card);
+                    });
+                });
+            }
+
+            function loadClientPortal(clientId) {
+                document.getElementById('client-dog-name').innerText = clientId;
+
+                if (db) {
+                    db.collection("clients").doc(clientId).get().then(doc => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            document.getElementById('client-dog-name').innerText = data.dogName || clientId;
+                            document.getElementById('client-owner-name').innerText = `Owner: ${data.ownerName || 'Valued Client'}`;
+                        }
+                    });
+
+                    db.collection("sessions").where("clientId", "==", clientId).get().then(snapshot => {
+                        const historyContainer = document.getElementById('client-session-history');
+                        document.getElementById('total-sessions-badge').innerText = `${snapshot.size} Sessions`;
+                        
+                        if (snapshot.empty) {
+                            historyContainer.innerHTML = '<p class="text-xs text-gray-400 italic">No recorded sessions yet.</p>';
+                            return;
+                        }
+
+                        historyContainer.innerHTML = "";
+                        snapshot.forEach(doc => {
+                            const s = doc.data();
+                            const card = document.createElement('div');
+                            card.className = "p-3 border rounded-xl bg-white shadow-sm space-y-1 text-sm";
+                            card.innerHTML = `
+                                <div class="flex justify-between font-bold text-gray-800">
+                                    <span>Training Session</span>
+                                    <span class="font-mono text-blue-600">${s.durationFormatted || '00:00:00'}</span>
+                                </div>
+                                <div class="text-xs text-gray-500">${'⭐'.repeat(s.rating || 5)} | ${s.skills ? s.skills.join(', ') : 'General Training'}</div>
+                                ${s.notes ? `<p class="text-xs bg-blue-50 p-2 rounded-lg text-gray-700 italic">"${s.notes}"</p>` : ''}
+                            `;
+                            historyContainer.appendChild(card);
+                        });
+                    });
+                }
+
+                document.getElementById('btn-submit-report').addEventListener('click', () => {
+                    const category = document.getElementById('report-category').value;
+                    const message = document.getElementById('report-message').value.trim();
+
+                    if (!message) return;
+
+                    if (db) {
+                        db.collection("reports").add({
+                            clientId: clientId,
+                            category: category,
+                            message: message,
+                            createdAt: new Date().toISOString()
+                        }).then(() => {
+                            document.getElementById('report-message').value = "";
+                            const alertBox = document.getElementById('feedback-alert');
+                            alertBox.classList.remove('hidden');
+                            setTimeout(() => alertBox.classList.add('hidden'), 4000);
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
